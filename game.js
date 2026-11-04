@@ -26,6 +26,9 @@
   const MIN_INTERVAL = 0.75;
   const MAX_LIVES = 3;        // batidas até o avião cair
   const INVULN = 1.5;         // segundos piscando (sem dano) depois de uma batida
+  const LOSS_RISE = 0.45;     // coração perdido: sobe sobre o avião...
+  const LOSS_FLY = 0.9;       // ...voa até o placar...
+  const LOSS_END = 1.3;       // ...e a vaga treme até aqui
   const TALK_TIME = 2.4;      // segundos que o balão de fala fica na tela
   const CHUTE_FALL = 50;      // velocidade de descida com paraquedas (px/s)
   const WEDDING_TIME = 45;    // segundos de jogo até chegar no casamento
@@ -338,28 +341,24 @@
   const LIFE_ROWS = [".oo...oo.", "orro.orro", "oWrrorrro", "oWrrrrrro", ".orrrrro.", "..orrro..", "...oro...", "....o...."];
   const LIFE = spriteFromRows(LIFE_ROWS, { o: "#0b2a5b", r: "#ff5a5f", W: "#ffffff" });
   const LIFE_EMPTY = spriteFromRows(LIFE_ROWS, { o: "#0b2a5b", r: "#7d8794", W: "#7d8794" });
+  const MINUS = spriteFromRows(["ooooooo", "orrrrro", "ooooooo"], { o: "#0b2a5b", r: "#ff5a5f" });
 
-  // Buquê de flores no fim da barra do calendário
-  const BOUQUET = (() => {
-    const c = document.createElement("canvas");
-    c.width = 11;
-    c.height = 14;
-    const g = c.getContext("2d");
-    g.fillStyle = "#2e7d32";
-    g.fillRect(4, 7, 3, 7);
-    g.fillStyle = "#4caf50";
-    g.fillRect(5, 7, 1, 7);
-    // Laço
-    g.fillStyle = "#ff8ab0";
-    g.fillRect(3, 10, 5, 1);
-    g.fillRect(2, 9, 1, 3);
-    g.fillRect(8, 9, 1, 3);
-    flower(g, 3, 5, "#ff5a5f");
-    flower(g, 7, 5, "#ffb3c1");
-    flower(g, 5, 2, "#ffffff");
-    flower(g, 5, 6, "#ff5a5f");
-    return c;
-  })();
+  // Alianças com brilhante no fim da barra do calendário
+  const RINGS = spriteFromRows(
+    [
+      "...W.......",
+      "..WDW......",
+      "...D.......",
+      "..GGG.GGG..",
+      ".G...G...G.",
+      "G...G.G...G",
+      "G...G.G...G",
+      "y...y.y...y",
+      ".y...y...y.",
+      "..yyy.yyy..",
+    ],
+    { W: "#ffffff", D: "#9fe8ff", G: "#ffd23f", y: "#c9901b" }
+  );
 
   // Paraquedas listrado (só a cúpula)
   const CHUTE = blobSprite(
@@ -658,6 +657,8 @@
     if (invuln > 0) return;
     lives--;
     invuln = INVULN;
+    // O coração sai do avião e voa até a vaga dele no placar
+    popups.push({ x: plane.x, y: plane.y, t: 0, slot: lives, dur: LOSS_END });
     if (kind === "banana") say(["Felipe, eu odeio banana!"]);
     if (kind === "rain") say(["Meu cabelo vai molhar,", "Felipe!"]);
     if (navigator.vibrate) navigator.vibrate(lives > 0 ? 60 : 200);
@@ -669,7 +670,7 @@
     o.dead = true;
     if (lives < MAX_LIVES) {
       lives++;
-      popups.push({ x: o.x, y: o.y, t: 0, label: "+1 vida" });
+      popups.push({ x: o.x, y: o.y, t: 0, label: "+1 vida", fill: "#ffd23f" });
     }
     say(["Caves do Sul,", "que delícia!"]);
   }
@@ -796,7 +797,7 @@
     // Na queda, a fala da noiva fica até ela pousar
     if (talk && (talk.t += dt) > TALK_TIME && state !== STATE.CRASH) talk = null;
     for (const p of popups) p.t += dt;
-    popups = popups.filter((p) => p.t < 0.8);
+    popups = popups.filter((p) => p.t < (p.dur || 0.8));
   }
 
   function updateCrash(dt) {
@@ -1268,6 +1269,11 @@
     return two(d.getDate()) + "." + two(d.getMonth() + 1) + "." + two(d.getFullYear() % 100);
   }
 
+  function drawCentered(img, x, y, s = 1) {
+    const w = Math.round(img.width * s), h = Math.round(img.height * s);
+    ctx.drawImage(img, Math.round(x - w / 2), Math.round(y - h / 2), w, h);
+  }
+
   function drawHUD() {
     // Data no topo e a barra do calendário crescendo até o casamento
     const p = Math.min(elapsed / WEDDING_TIME, 1);
@@ -1281,12 +1287,39 @@
     ctx.fillRect(x0, by, Math.round((x1 - x0) * p), 5);
     ctx.fillStyle = "#8bd17c";
     ctx.fillRect(x0, by, Math.round((x1 - x0) * p), 1);
-    ctx.drawImage(BOUQUET, x1 + 3, by - 5);
+    ctx.drawImage(RINGS, x1 + 4, by - 5);
     for (let i = 0; i < MAX_LIVES; i++) {
-      ctx.drawImage(i < lives ? LIFE : LIFE_EMPTY, 4 + i * 11, 4);
+      // A vaga que perdeu o coração fica cheia até ele chegar, depois treme
+      const loss = popups.find((p) => p.slot === i);
+      let img = i < lives ? LIFE : LIFE_EMPTY, dx = 0, dy = 0;
+      if (loss && loss.t < LOSS_FLY) img = LIFE;
+      else if (loss) {
+        const k = 1 - (loss.t - LOSS_FLY) / (LOSS_END - LOSS_FLY);
+        dx = Math.round(Math.sin(loss.t * 70) * 2 * k);
+        dy = Math.round(Math.cos(loss.t * 55) * k);
+      }
+      ctx.drawImage(img, 4 + i * 11 + dx, 4 + dy);
     }
     for (const p of popups) {
-      text(p.label, p.x, p.y - 10 - p.t * 20, 8, { fill: "#ffd23f" });
+      if (p.slot === undefined) {
+        text(p.label, p.x, p.y - 10 - p.t * 20, 8, { fill: p.fill });
+      } else if (p.t < LOSS_RISE) {
+        // "-" e o coração saltam do avião
+        const k = p.t / LOSS_RISE;
+        const s = 1 + Math.sin(Math.min(k * 2, 1) * Math.PI) * 0.6;
+        const y = p.y - 12 - (1 - (1 - k) * (1 - k)) * 10;
+        drawCentered(MINUS, p.x - 7, y, s);
+        drawCentered(LIFE, p.x + 3, y, s);
+      } else if (p.t < LOSS_FLY) {
+        // Voa em arco até a vaga no topo, encolhendo para o tamanho dela
+        const k = (p.t - LOSS_RISE) / (LOSS_FLY - LOSS_RISE);
+        const e = k * k * (3 - 2 * k);
+        const sx = p.x + 2, sy = p.y - 22;
+        const tx = 4 + p.slot * 11 + LIFE.width / 2, ty = 4 + LIFE.height / 2;
+        const x = sx + (tx - sx) * e + Math.sin(k * Math.PI) * 20;
+        const y = sy + (ty - sy) * e;
+        drawCentered(LIFE, x, y, 1 + (1 - e) * 0.3);
+      }
     }
 
     if (talk) {
