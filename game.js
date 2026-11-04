@@ -661,6 +661,7 @@
     popups.push({ x: plane.x, y: plane.y, t: 0, slot: lives, dur: LOSS_END });
     if (kind === "banana") say(["Felipe, eu odeio banana!"]);
     if (kind === "rain") say(["Meu cabelo vai molhar,", "Felipe!"]);
+    if (kind === "bird") say(["Ai Felipe, coitado", "do pássaro"]);
     if (navigator.vibrate) navigator.vibrate(lives > 0 ? 60 : 200);
     if (lives <= 0) crash();
   }
