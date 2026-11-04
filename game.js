@@ -33,11 +33,17 @@
     { min: 5, name: "Bronze", base: "#cd7f32", dark: "#8a5220", light: "#e8a865" },
   ];
 
-  const STATE = { READY: 0, PLAYING: 1, OVER: 2 };
+  const STATE = { READY: 0, PLAYING: 1, OVER: 2, INTRO: 3 };
+
+  // Momentos da cena de abertura (em segundos)
+  const INTRO = { brideTalk: 1.6, felipeOut: 4.8, felipeTalk: 6, board: 7.6, engine: 9.6, takeoff: 10.4, end: 13 };
+  const WALK = 45;            // velocidade dos personagens andando (px/s)
 
   let state = STATE.READY;
   let plane, obstacles, score, distance, groundX, clouds, overTime;
   let speed, spawnTimer, elapsed, newRecord;
+  let introT = 0;
+  let readyAt = -Infinity;    // quando a tela inicial apareceu depois da abertura
   let holding = false;
   let bestDist = loadBestDist();
 
@@ -177,6 +183,70 @@
     ["..ooo..", "..rro..", "oorrooo", "orrrrro", ".orrro.", "..oro..", "...o..."],
     { o: "#7a1d1d", r: "#e05050" }
   );
+
+  // Personagens da abertura, virados para a direita (o desenho é espelhado
+  // quando andam para a esquerda)
+  const BRIDE = spriteFromRows(
+    [
+      "......ooooo.....",
+      ".....ohhhhho....",
+      "...oovhhhhhho...",
+      "..ovvhhhhhhhho..",
+      "..ovhhhhhssssso.",
+      ".ovvhhhhsssseso.",
+      ".ovhhhhhssssrso.",
+      ".ovhhhhhssssso..",
+      ".ovhhhhhossso...",
+      ".ovhhhhhoosoo...",
+      ".ovhhhhowwwwo...",
+      ".ovvhhowwwwwwo..",
+      "..ovvowwwwwlFfo.",
+      "..ovowwwwwwfFFfo",
+      "...oowwwwwwoffo.",
+      "....owwwwwwwoo..",
+      "...ogwwwwwwwo...",
+      "...ogwwwwwwwwo..",
+      "..ogwwwwwwwwwo..",
+      "..ogwwwwwwwwwwo.",
+      ".ogwwwwwwwwwwwo.",
+      ".oggwwwwwwwwggo.",
+      "..oooooooooooo..",
+    ],
+    {
+      o: "#0b2a5b", h: "#ffd23f", v: "#eef6ff", s: "#f5c9a0", e: "#0b2a5b", r: "#ff8a8d",
+      w: "#ffffff", g: "#c9d3e0", l: "#4caf50", f: "#ff5a5f", F: "#ffb3c1",
+    }
+  );
+
+  const PILOT_TOP = [
+    "...oooooo....",
+    "..oCCCCCCo...",
+    ".oCCCCCCCCo..",
+    ".occccyycco..",
+    ".oooooooooooo",
+    ".ohhsssssso..",
+    ".ohssskkkkko.",
+    ".ohsssskkkso.",
+    "..osssssssso.",
+    "..ossssmmso..",
+    "...oossssoo..",
+    "..ojjjtTtjjo.",
+    ".ojjjjtTjjjjo",
+    ".ojjyjjTjjjjo",
+    ".ojjjjjTjjjjo",
+    ".osojjjjjjoso",
+    "..okkkkkkkko.",
+    "..opppppppo..",
+  ];
+  const PILOT_PAL = {
+    o: "#0b2a5b", C: "#ffffff", c: "#1b2a4a", y: "#ffd23f", s: "#f2c39b", h: "#5b3a1a",
+    k: "#1a1a1a", m: "#c98d6a", j: "#22355e", t: "#ffffff", T: "#1a1a1a", p: "#1b2a4a", b: "#111111",
+  };
+  // Dois quadros: parado e passo
+  const PILOT = [
+    spriteFromRows([...PILOT_TOP, "..oppppoppo..", "..oppo.oppo..", "..oppo.oppo..", "..obbbo.obbbo", "..ooooo.ooooo"], PILOT_PAL),
+    spriteFromRows([...PILOT_TOP, "..oppo.oppo..", ".oppo...oppo.", "oppo.....oppo", "obbbo....obbbo", "ooooo....ooooo"], PILOT_PAL),
+  ];
 
   // Medalhas (círculo com brilho) e o espaço vazio quando não há medalha
   function medalSprite(m) {
@@ -356,7 +426,10 @@
 
   function press() {
     holding = true;
+    // A abertura não pode ser pulada
     if (state === STATE.READY) {
+      // Só começa depois que as instruções terminam de aparecer
+      if (performance.now() - readyAt < 1300) return;
       state = STATE.PLAYING;
     } else if (state === STATE.OVER && performance.now() - overTime > 900) {
       reset();
@@ -397,6 +470,15 @@
         c.x = W + 10;
         c.y = 15 + Math.random() * 100;
       }
+    }
+
+    if (state === STATE.INTRO) {
+      introT += dt;
+      if (introT >= INTRO.end) {
+        state = STATE.READY;
+        readyAt = performance.now();
+      }
+      return;
     }
 
     if (state === STATE.READY) {
@@ -518,17 +600,29 @@
     }
   }
 
-  // Avião com hélice; scale > 1 amplia mantendo os pixels (tela inicial)
-  function drawPlaneAt(x, y, angle, scale = 1) {
+  // Avião com hélice; scale > 1 amplia mantendo os pixels (tela inicial).
+  // spin = 0 deixa a hélice parada; gear desenha as rodas (avião no chão).
+  function drawPlaneAt(x, y, angle, scale = 1, opts = {}) {
+    // Hélice gira mais rápido quando está subindo
+    const { spin = holding && state === STATE.PLAYING ? 60 : 30, gear = false } = opts;
     ctx.save();
     ctx.translate(Math.round(x), Math.round(y));
     ctx.rotate(angle);
     ctx.scale(scale, scale);
+
+    if (gear) {
+      ctx.fillStyle = "#0b2a5b";
+      ctx.fillRect(3, 3, 1, 3);
+      ctx.fillRect(-9, 3, 1, 2);
+      ctx.fillStyle = "#222222";
+      ctx.fillRect(2, 5, 3, 3);
+      ctx.fillRect(-10, 5, 2, 2);
+      ctx.fillStyle = "#9a9a9a";
+      ctx.fillRect(3, 6, 1, 1);
+    }
     ctx.drawImage(PLANE, -12, -6);
 
-    // Hélice (gira mais rápido quando está subindo)
-    const spin = holding && state === STATE.PLAYING ? 60 : 30;
-    const blade = Math.round(Math.abs(Math.sin(plane.t * spin)) * 5) + 1;
+    const blade = spin ? Math.round(Math.abs(Math.sin(plane.t * spin)) * 5) + 1 : 5;
     ctx.fillStyle = "#555555";
     ctx.fillRect(11, -blade, 1, blade * 2);
     ctx.fillStyle = "#0b2a5b";
@@ -538,7 +632,7 @@
   }
 
   function drawPlane() {
-    if (state === STATE.READY) return;
+    if (state === STATE.READY || state === STATE.INTRO) return;
     drawPlaneAt(plane.x, plane.y, plane.angle);
   }
 
@@ -582,16 +676,166 @@
     text(label, cx, y, 8, { outline: null });
   }
 
+  // ---------- Abertura ----------
+  // Balão de fala com o texto aparecendo letra por letra (chars = letras visíveis)
+  function speech(lines, cx, bottom, tailX, chars) {
+    const widths = lines.map((l) => {
+      const s = textSprite(l, 8 * UI_SCALE, "#0b2a5b", null);
+      return (s.width - s.pad * 2) / UI_SCALE;
+    });
+    const w = Math.round(Math.max(...widths)) + 12;
+    const h = lines.length * 12 + 7;
+    const x = Math.round(Math.min(Math.max(cx - w / 2, 3), W - 3 - w));
+    const y = Math.round(bottom - h);
+
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.fillRect(x + 2, y + h, w - 2, 2);
+    ctx.fillStyle = "#0b2a5b";
+    ctx.fillRect(x + 1, y, w - 2, h);
+    ctx.fillRect(x, y + 1, w, h - 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+
+    // Ponta do balão apontando para quem fala
+    const tx = Math.round(Math.min(Math.max(tailX - 2, x + 4), x + w - 8));
+    for (let i = 0; i < 4; i++) {
+      ctx.fillStyle = "#0b2a5b";
+      ctx.fillRect(tx - 1, y + h - 1 + i, 6 - i * 2 + 1, 1);
+      ctx.fillStyle = "#ffffff";
+      if (i < 3) ctx.fillRect(tx, y + h - 1 + i, 5 - i * 2, 1);
+    }
+
+    let left = chars;
+    lines.forEach((line, i) => {
+      const shown = line.slice(0, Math.max(0, Math.floor(left)));
+      left -= line.length;
+      if (shown) {
+        text(shown, x + (w - widths[i]) / 2, y + 5 + i * 12, 8, { fill: "#0b2a5b", outline: null, align: "left" });
+      }
+    });
+  }
+
+  function drawPerson(sprite, x, feet, faceLeft) {
+    const left = Math.round(x - sprite.width / 2);
+    const top = Math.round(feet - sprite.height);
+    if (!faceLeft) return ctx.drawImage(sprite, left, top);
+    ctx.save();
+    ctx.translate(left + sprite.width, top);
+    ctx.scale(-1, 1);
+    ctx.drawImage(sprite, 0, 0);
+    ctx.restore();
+  }
+
+  function drawIntro() {
+    const t = introT;
+    const ground = H - GROUND_H;
+    // Avião estacionado (escala 3), porta e escadinha logo à direita da asa
+    const px = 42, py = ground - 23;
+    const doorX = px + 9, stairX = px + 26;
+    const feetAt = (x) =>
+      x >= stairX ? ground + 2 : py + 9 + ((x - doorX) / (stairX - doorX)) * (ground + 2 - (py + 9));
+
+    // Avião: parado, liga o motor, corre na pista e decola
+    let ax = px, ay = py, angle = 0, gear = true;
+    if (t >= INTRO.takeoff) {
+      const s = t - INTRO.takeoff;
+      const lift = Math.max(0, s - 1.2);
+      ax = px + 30 * s * s;
+      ay = py - 55 * lift * lift;
+      angle = -Math.min(0.45, lift * 0.6);
+      gear = lift < 0.4;
+      // Poeira saindo das rodas enquanto corre
+      if (lift === 0) {
+        ctx.fillStyle = "#f3eeb8";
+        for (let i = 0; i < 4; i++) {
+          const age = (s * 3 + i / 4) % 1;
+          const size = Math.max(1, Math.round(4 - age * 3));
+          ctx.fillRect(Math.round(ax - 30 - age * 25), Math.round(ground - age * 6), size, size);
+        }
+      }
+    }
+    drawPlaneAt(ax, ay, angle, 3, { spin: t >= INTRO.engine ? 30 : 0, gear });
+
+    if (t < INTRO.engine) {
+      // Porta aberta enquanto alguém sai ou entra
+      const open = (t >= INTRO.felipeOut && t < INTRO.felipeOut + 0.5) || t >= INTRO.board;
+      ctx.fillStyle = "#0b2a5b";
+      if (open) {
+        ctx.fillRect(px + 6, py - 3, 6, 12);
+      } else {
+        ctx.fillRect(px + 6, py - 3, 6, 1);
+        ctx.fillRect(px + 6, py - 3, 1, 12);
+        ctx.fillRect(px + 11, py - 3, 1, 12);
+      }
+      // Escadinha
+      for (let x = doorX + 3; x <= stairX; x++) {
+        const y = Math.round(feetAt(x));
+        ctx.fillStyle = "#7d8794";
+        ctx.fillRect(x, y, 1, 2);
+        if ((x - doorX) % 4 === 0) {
+          ctx.fillStyle = "#c0c7d0";
+          ctx.fillRect(x - 3, y, 4, 1);
+        }
+      }
+    }
+
+    // Noiva: chega pela direita, fala e depois embarca
+    const brideStop = 136;
+    let bx = brideStop, brideWalk = false;
+    if (t < INTRO.brideTalk) {
+      bx = W + 12 + (brideStop - W - 12) * (t / INTRO.brideTalk);
+      brideWalk = true;
+    } else if (t >= INTRO.board) {
+      bx = brideStop - (t - INTRO.board) * WALK;
+      brideWalk = true;
+    }
+
+    // Felipe: sai do avião, fala e volta para o avião
+    const felipeStop = 92;
+    const outEnd = INTRO.felipeOut + (felipeStop - doorX) / WALK;
+    let fx = null, felipeLeft = false, felipeWalk = false;
+    if (t >= INTRO.felipeOut && t < outEnd) {
+      fx = doorX + (t - INTRO.felipeOut) * WALK;
+      felipeWalk = true;
+    } else if (t >= outEnd && t < INTRO.board) {
+      fx = felipeStop;
+    } else if (t >= INTRO.board) {
+      fx = felipeStop - (t - INTRO.board) * WALK;
+      felipeLeft = felipeWalk = true;
+    }
+
+    const step = Math.floor(t * 8) % 2;
+    if (bx > doorX) {
+      drawPerson(BRIDE, bx, feetAt(bx) - (brideWalk ? step : 0), true);
+    }
+    if (fx !== null && fx > doorX) {
+      drawPerson(PILOT[felipeWalk ? step : 0], fx, feetAt(fx), felipeLeft);
+    }
+
+    if (t >= INTRO.brideTalk && t < INTRO.felipeOut) {
+      const head = ground + 2 - BRIDE.height;
+      speech(["Felipe, estou atrasada", "para o nosso casamento!"], bx, head - 5, bx - 3, (t - INTRO.brideTalk) * 30);
+    }
+    if (fx !== null && t >= INTRO.felipeTalk && t < INTRO.board) {
+      const head = ground + 2 - PILOT[0].height;
+      speech(["Vamos!"], fx, head - 5, fx + 2, (t - INTRO.felipeTalk) * 15);
+    }
+  }
+
   function drawStartScreen() {
     const t = plane.t;
+    // Depois da abertura, avião, título e instruções entram aos poucos
+    const age = (performance.now() - readyAt) / 1000;
+    const enter = (delay) => easeOutBack(Math.min(Math.max((age - delay) / 0.5, 0), 1));
 
     // Título com leve flutuação
-    const ty = Math.round(H * 0.08 + Math.sin(t * 2) * 2);
-    text("Flappy", W / 2, ty, 24, { fill: "#ffd23f" });
-    text("Plane", W / 2, ty + 28, 24, { fill: "#ffffff" });
+    const ty = Math.round(H * 0.08 + Math.sin(t * 2) * 2 - (1 - enter(0.5)) * 70);
+    text("Missão", W / 2, ty, 24, { fill: "#ffd23f" });
+    text("Casamento", W / 2, ty + 28, 24, { fill: "#ffffff" });
 
     // Avião grande voando, com rastro de fumaça
-    const px = W / 2 + 6;
+    const fly = 1 - (1 - Math.min(age / 0.9, 1)) ** 3;
+    const px = -30 + (W / 2 + 36) * fly;
     const py = Math.round(H * 0.38 + Math.sin(t * 3) * 5);
     for (let i = 0; i < 5; i++) {
       const age = (t * 1.5 + i / 5) % 1;
@@ -605,7 +849,8 @@
 
     // Instruções
     const iw = 140, ih = 40;
-    const ix = Math.round((W - iw) / 2), iy = Math.round(H * 0.53);
+    const ix = Math.round((W - iw) / 2);
+    const iy = Math.round(H * 0.53 + (1 - enter(0.8)) * H * 0.5);
     panel(ix, iy, iw, ih);
     const bob = Math.round(Math.sin(t * 6));
     ctx.drawImage(ARROW_UP, ix + 12, iy + 9 - bob);
@@ -613,14 +858,7 @@
     text("Segure para subir", ix + 26, iy + 9, 8, { fill: "#5b3a1a", outline: null, align: "left" });
     text("Solte para descer", ix + 26, iy + 24, 8, { fill: "#5b3a1a", outline: null, align: "left" });
 
-    if (blink()) button("Toque para jogar", W / 2, Math.round(iy + ih + 16));
-
-    if (bestDist > 0) {
-      text("Recorde: " + bestDist + " m", W / 2, H - GROUND_H + 18, 8, {
-        fill: "#5b3a1a",
-        outline: null,
-      });
-    }
+    if (age > 1.3 && blink()) button("Toque para jogar", W / 2, Math.round(iy + ih + 16));
   }
 
   function drawGameOver() {
@@ -674,6 +912,7 @@
   function drawUI() {
     if (state === STATE.PLAYING) drawHUD();
     else if (state === STATE.READY) drawStartScreen();
+    else if (state === STATE.INTRO) drawIntro();
     else drawGameOver();
   }
 
@@ -722,6 +961,7 @@
   window.addEventListener("resize", resize);
 
   reset();
+  state = STATE.INTRO;
   resize();
   requestAnimationFrame(loop);
 })();
