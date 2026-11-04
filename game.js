@@ -662,7 +662,6 @@
     if (kind === "banana") say(["Felipe, eu odeio banana!"]);
     if (kind === "rain") say(["Meu cabelo vai molhar,", "Felipe!"]);
     if (kind === "bird") say(["Ai Felipe, coitado", "do pássaro"]);
-    if (kind === "ground") say(["Quero um whisky"]);
     if (navigator.vibrate) navigator.vibrate(lives > 0 ? 60 : 200);
     if (lives <= 0) crash();
   }
@@ -863,13 +862,9 @@
       }
     }
 
-    // Fim de jogo quando todos estão salvos no chão e a noiva terminou de escrever
-    const bride = jumpers[0];
+    // Fim de jogo quando todos estão salvos no chão e terminaram de falar
     const landed = jumpers.every((j) => j.landedAt !== null);
-    if (
-      state === STATE.CRASH && landed && plane.down &&
-      crashT - Math.max(...jumpers.map((j) => j.landedAt)) > 0.8 && crashT - bride.landedAt > 1.6
-    ) {
+    if (state === STATE.CRASH && landed && plane.down && crashT - Math.max(...jumpers.map((j) => j.landedAt)) > 1.6) {
       gameOver();
     }
   }
@@ -1537,19 +1532,23 @@
     if (age > 1.3 && blink()) button("Toque para jogar", W / 2, Math.round(iy + ih + 16));
   }
 
-  // Fim de jogo: a fala da noiva continua e o aviso fica no meio da tela
+  // Fim de jogo: as falas continuam e o aviso fica no meio da tela
   function drawGameOver() {
-    drawBrideComplaint();
+    drawLandingTalk();
     const age = (performance.now() - overTime) / 1000;
     if (age > 0.5) button("Tentar de novo", W / 2, Math.round(H / 2 - 4));
   }
 
-  // A noiva, já no chão, reclama do bananal
-  function drawBrideComplaint() {
-    const bride = jumpers[0];
-    if (!bride || bride.landedAt === null || crashT < bride.landedAt + 0.3) return;
+  // Os dois no chão: a noiva reclama do bananal e, ao mesmo tempo, o piloto
+  // pede um whisky (com o balão embaixo dele, para não cobrir o da noiva)
+  function drawLandingTalk() {
+    const [bride, pilot] = jumpers;
+    if (!bride || bride.landedAt === null || pilot.landedAt === null) return;
+    const t = crashT - Math.max(bride.landedAt, pilot.landedAt) - 0.3;
+    if (t < 0) return;
     const head = bride.y - BRIDE.height;
-    speech(["Eca, uma plantação", "de banana!"], bride.x, head - 4, bride.x + 2, (crashT - bride.landedAt - 0.3) * 30);
+    speech(["Eca, uma plantação", "de banana!"], bride.x, head - 4, bride.x + 2, t * 30);
+    speech(["Quero um whisky"], pilot.x, pilot.y + 4, pilot.x, t * 30, true);
   }
 
   function drawWeddingText() {
@@ -1574,7 +1573,7 @@
       else drawWeddingText();
       return;
     }
-    if (state === STATE.CRASH) drawBrideComplaint();
+    if (state === STATE.CRASH) drawLandingTalk();
     if (state === STATE.PLAYING || state === STATE.CRASH) drawHUD();
     else if (state === STATE.READY) drawStartScreen();
     else if (state === STATE.INTRO) drawIntro();
