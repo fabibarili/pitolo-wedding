@@ -1,7 +1,7 @@
 (() => {
   // O jogo é desenhado num canvas pequeno (view) e ampliado no canvas da
   // página; os textos vão por cima com o dobro da resolução, porque a fonte
-  // Minecraft só fica nítida a partir de 16px
+  // fica mais nítida em tamanhos maiores
   const canvas = document.getElementById("game");
   const screen = canvas.getContext("2d");
   const view = document.createElement("canvas");
@@ -194,10 +194,10 @@
   MEDALS.forEach((m) => (m.sprite = medalSprite(m)));
   const MEDAL_EMPTY = blobSprite(22, 22, [[11, 11, 10.5]], () => "#c9c27a", "#a89f5a");
 
-  // ---------- Texto com a fonte Minecraft ----------
+  // ---------- Texto com a fonte Square ----------
   // A fonte é desenhada num canvas à parte e depois "binarizada" (sem
   // antialiasing), ganhando um contorno de 1 pixel e uma sombra embaixo.
-  const font = new FontFace("Minecraft", "url(fonts/Minecraft.ttf)");
+  const font = new FontFace("Square", "url(fonts/Square.ttf)");
   font
     .load()
     .then((f) => {
@@ -220,10 +220,10 @@
     if (sprite) return sprite;
     if (textCache.size > 300) textCache.clear();
 
-    // px = pixels da tela por pixel da fonte (a grade da fonte é de 16 por "em")
+    // px = espessura do contorno, que cresce junto com o tamanho do texto
     const px = Math.max(1, Math.round(size / 16));
     const pad = px * 3;
-    const fontCss = `${size}px Minecraft, monospace`;
+    const fontCss = `${size}px Square, monospace`;
     scratch.font = fontCss;
     const advances = [...str].map((ch) => Math.round(scratch.measureText(ch).width));
     const w = advances.reduce((a, b) => a + b, 0) + pad * 2;
@@ -653,7 +653,7 @@
     // Números à direita, com contagem subindo
     const count = Math.min(Math.max((age - 0.5) / 0.8, 0), 1);
     const rx = bx + 66;
-    text("Distancia", rx, by + 10, 8, { ...label, align: "left" });
+    text("Distância", rx, by + 10, 8, { ...label, align: "left" });
     text(Math.floor(Math.floor(distance) * count) + " m", rx, by + 22, 16, { align: "left" });
     text("Pontos", rx, by + 46, 8, { ...label, align: "left" });
     text(String(Math.floor(score * count)), bx + bw - 10, by + 46, 8, { fill: "#0b2a5b", outline: null, align: "right" });
