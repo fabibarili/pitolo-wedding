@@ -662,6 +662,7 @@
     if (kind === "banana") say(["Felipe, eu odeio banana!"]);
     if (kind === "rain") say(["Meu cabelo vai molhar,", "Felipe!"]);
     if (kind === "bird") say(["Ai Felipe, coitado", "do pássaro"]);
+    if (kind === "ground") say(["Quero um whisky"]);
     if (navigator.vibrate) navigator.vibrate(lives > 0 ? 60 : 200);
     if (lives <= 0) crash();
   }
